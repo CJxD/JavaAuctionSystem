@@ -1,10 +1,17 @@
 package com.cjwatts.auctionsystem;
 
 import java.io.IOException;
+import java.sql.Timestamp;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 import com.cjwatts.auctionsystem.alert.Alerter;
+import com.cjwatts.auctionsystem.entity.Category;
 import com.cjwatts.auctionsystem.entity.Item;
 import com.cjwatts.auctionsystem.entity.User;
+import com.cjwatts.auctionsystem.exception.BidException;
 import com.cjwatts.auctionsystem.io.AuctionConsole;
 import com.cjwatts.auctionsystem.io.Comms;
 import com.cjwatts.auctionsystem.io.CommsListener;
@@ -58,19 +65,39 @@ public class AuctionSystemServer implements CommsListener {
 				Request request = (Request) received;
 				Alerter.getHandler().info(
 						"Received " + request.getClass().getSimpleName() + " from "
-								+ request.getSource());
+								+ request.getSource().getHostAddress());
 	
 				// Use visitor pattern to handle the request appropriately
 				request.accept(this);
 			} catch (ClassCastException ex) {
 				Alerter.getHandler().warning(
 						"Could not receive " + received.getClass().getSimpleName()
-								+ " from " + received.getSource()
+								+ " from " + received.getSource().getHostAddress()
 								+ ": not a valid request.");
 			}
 		}
 	}
 
+	/**
+	 * Finish off a response message and send it back
+	 * 
+	 * @param rq
+	 * @param re
+	 */
+	private void respond(Request rq, Response re) {
+		// If no new session token has been provided, generate one
+		SessionHandler sh = new SessionHandler(storage);
+		re.setSessionToken(sh.generateToken(rq.getSenderId()));
+		
+		String info = re.getClass().getSimpleName() + " to " + rq.getSource().getHostAddress();
+		// Send the response to whoever sent the request
+		if (Comms.sendMessage(re, rq.getSource())) {
+			Alerter.getHandler().info("Sent " + info);
+		} else {
+			Alerter.getHandler().warning("Failed to send " + info);
+		}
+	}
+	
 	/**
 	 * Checks if the session token is valid.
 	 * If not, the response is returned immediately with error.
@@ -87,32 +114,10 @@ public class AuctionSystemServer implements CommsListener {
 			return true;
 		} else {
 			re.setSessionToken(new byte[0]);
-			re.setMessage("Session has expired. Please log in again to resume.");
+			re.setMessage("Your session has expired. Please log in again to resume.");
 			re.setSuccess(false);
 			respond(rq, re);
 			return false;
-		}
-	}
-	
-	/**
-	 * Finish off a response message and send it back
-	 * 
-	 * @param rq
-	 * @param re
-	 */
-	private void respond(Request rq, Response re) {
-		// Send the response to whoever sent the request
-		Comms.setRemoteAddr(rq.getSource());
-		
-		// If no new session token has been provided, generate one
-		SessionHandler sh = new SessionHandler(storage);
-		re.setSessionToken(sh.generateToken(rq.getSenderId().toLowerCase()));
-		
-		String info = re.getClass().getSimpleName() + " to " + rq.getSource();
-		if (Comms.sendMessage(re)) {
-			Alerter.getHandler().info("Sent " + info);
-		} else {
-			Alerter.getHandler().warning("Failed to send " + info);
 		}
 	}
 	
@@ -129,7 +134,7 @@ public class AuctionSystemServer implements CommsListener {
 		re.setSuccess(false);
 
 		SessionHandler sh = new SessionHandler(storage);
-		String id = rq.getSenderId().toLowerCase();
+		String id = rq.getSenderId();
 
 		// Either a password or session token can be specified
 		if (rq.getPassword() != null) {
@@ -180,8 +185,11 @@ public class AuctionSystemServer implements CommsListener {
 		if (item != null) {
 			try {
 				// Set the bid and store
-				re.setSuccess(item.addBid(rq.getSenderId(), rq.getBid()));
+				item.addBid(rq.getSenderId(), rq.getBid());
 				storage.writeObject(rq.getItemId(), item);
+				re.setSuccess(true);
+			} catch (BidException ex) {
+				re.setMessage(ex.getMessage());
 			} catch (IOException ex) {
 				Alerter.getHandler().severe("Persistence Error",
 						"Unable to save item information for new bid.");
@@ -206,9 +214,7 @@ public class AuctionSystemServer implements CommsListener {
 
 		try {
 			storage.selectDb("items");
-			int id = storage.nextId();
-			storage.writeObject(id, rq.getItem());
-			re.setNewId(id);
+			re.setNewId(storage.writeObject(rq.getItem()));
 			re.setSuccess(true);
 		} catch (IOException ex) {
 			Alerter.getHandler().severe("Persistence Error",
@@ -231,17 +237,17 @@ public class AuctionSystemServer implements CommsListener {
 
 		try {
 			storage.selectDb("users");
-			String id = rq.getSenderId().toLowerCase();
+			String id = rq.getSenderId();
 			User user = rq.getUser();
 			
 			// Check if username is already taken
-			User check = (User) storage.readObject(id);
+			User check = (User) storage.readObject(id.toLowerCase());
 			
 			if (check != null) {
 				re.setMessage("Username already taken, please try another.");
 				re.setSuccess(false);
 			} else {
-				storage.writeObject(id, user);
+				storage.writeObject(id.toLowerCase(), user);
 
 				PasswordHasher ph = new PasswordHasher(storage);
 				ph.writePassword(id, rq.getPassword());
@@ -275,10 +281,10 @@ public class AuctionSystemServer implements CommsListener {
 			User profile = rq.getProfile();
 			if (profile != null) {
 				// If the profile isn't null, update
-				storage.writeObject(rq.getSenderId(), profile);
+				storage.writeObject(rq.getSenderId().toLowerCase(), profile);
 			} else {
 				// Otherwise, return the existing one
-				profile = (User) storage.readObject(rq.getSenderId());
+				profile = (User) storage.readObject(rq.getSenderId().toLowerCase());
 			}
 			re.setProfile(profile);
 			re.setSuccess(true);
@@ -305,15 +311,101 @@ public class AuctionSystemServer implements CommsListener {
 		
 		try {
 			storage.selectDb("items");
-			Item item = (Item) storage.readObject(rq.getItemId());
-			re.setItem(item);
+			
+			Map<Integer, Item> fetched = new HashMap<>();
+			Set<Object> needed = storage.keySet();
+			// TODO: Temporary
+			if (needed.isEmpty()) {
+				Item test1 = new Item();
+				test1.setCategory(Category.COMPUTING);
+				test1.setDescription("A new, lightweight, Java auction system that uses sockets to communicate with a central sever.");
+				test1.setStart(new Timestamp(new Date().getTime() / 1000));
+				test1.setEnd(new Timestamp(Integer.MAX_VALUE));
+				test1.setTitle("Java Auction System");
+				test1.setVendor("cw17g12");
+				storage.writeObject(test1);
+				
+				Item test2 = new Item();
+				test2.setCategory(Category.MISC);
+				test2.setDescription("Contrary to the system in use, this item can only be purchased through a high mark given for the coursework. (16/17.5 or greater)");
+				test2.setStart(new Timestamp(new Date().getTime() / 1000));
+				test2.setEnd(new Timestamp(1370840400));
+				test2.setTitle("Eternal Respect");
+				test2.setVendor("cw17g12");
+				storage.writeObject(test2);
+				
+				Item test3 = new Item();
+				test3.setCategory(Category.MISC);
+				test3.setDescription("This auction will end within the next hour! Hurry!");
+				test3.setStart(new Timestamp(new Date().getTime() / 1000));
+				test3.setEnd(new Timestamp(test2.getStart().getTime() + 3600));
+				test3.setTitle("Lack of Time");
+				test3.setVendor("cw17g12");
+				storage.writeObject(test3);
+			}
+			
+			// Fetch the required items
+			Item next;
+			boolean valid;
+			for (Object i : needed) {
+				next = (Item) storage.readObject(i);
+				
+				// Check if auction is running
+				if (next.isActive()) {
+					valid = true;
+				} else {
+					valid = false;
+				}
+				
+				/*
+				 * Search filters
+				 */
+				if (rq.getStartTime() != null) {
+					if (next.getStart().compareTo(rq.getStartTime()) > 0) {
+						// Override even if auction is not running
+						valid = true;
+					} else {
+						valid = false;
+					}
+				}
+				
+				if (valid && rq.getItemId() != null) {
+					if (!i.equals(rq.getItemId())) {
+						valid = false;
+					}
+				}
+				
+				if (valid && rq.getCategory() != null) {
+					if (!next.getCategory().equals(rq.getCategory())) {
+						valid = false;
+					}
+				}
+				
+				if (valid && rq.getVendor() != null) {
+					if (!next.getVendor().equals(rq.getVendor())) {
+						valid = false;
+					}
+				}
+				
+				// Add this item if it passed the search criteria
+				if (valid) {
+					fetched.put((Integer) i, next);
+				}
+			}
+			
+			re.setItems(fetched);
 			re.setSuccess(true);
 		} catch (IOException ex) {
 			Alerter.getHandler().severe("Persistence Error",
 					"Unable to retrieve item information.");
+			ex.printStackTrace();
 			re.setMessage("A server error occurred. Please try again later.");
 		}
 
+		if (rq.isAutomatic()) {
+			// Repeat session token
+			re.setSessionToken(rq.getSessionToken());
+		}
 		respond(rq, re);
 	}
 }

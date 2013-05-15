@@ -6,7 +6,7 @@ public class BidRequest extends Request {
 
 	private static final long serialVersionUID = 1L;
 	private int itemId;
-	private float bid;
+	private double bid;
 
 	@Override
 	public void accept(AuctionSystemServer server) {
@@ -21,11 +21,11 @@ public class BidRequest extends Request {
 		this.itemId = itemId;
 	}
 
-	public float getBid() {
+	public double getBid() {
 		return bid;
 	}
 
-	public void setBid(float bid) {
+	public void setBid(double bid) {
 		this.bid = bid;
 	}
 }

@@ -1,18 +1,20 @@
 package com.cjwatts.auctionsystem.message;
 
+import java.util.Map;
+
 import com.cjwatts.auctionsystem.entity.Item;
 
 public class ViewResponse extends Response {
 
 	private static final long serialVersionUID = 1L;
 
-	private Item item;
+	private Map<Integer, Item> items;
 
-	public Item getItem() {
-		return item;
+	public Map<Integer, Item> getItems() {
+		return items;
 	}
 
-	public void setItem(Item item) {
-		this.item = item;
+	public void setItems(Map<Integer, Item> items) {
+		this.items = items;
 	}
 }

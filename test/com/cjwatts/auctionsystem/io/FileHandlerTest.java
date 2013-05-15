@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -56,6 +58,20 @@ public class FileHandlerTest {
 		testWrite();
 		String test = (String) fh.readObject(testObj.hashCode());
 		assertEquals(test, testObj);
+	}
+	
+	@Test
+	public void testKeySet() throws IOException {
+		fh.writeObject(1, testObj);
+		fh.writeObject(2, testObj);
+		fh.writeObject(3, testObj);
+		
+		Set<Integer> expected = new HashSet<>();
+		expected.add(1);
+		expected.add(2);
+		expected.add(3);
+		
+		assertEquals(expected, fh.keySet());
 	}
 	
 	@Test

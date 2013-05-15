@@ -34,7 +34,7 @@ public class PasswordHasher {
 		try {
 			// Hash the password with the user id (a constant salt)
 			MessageDigest md = MessageDigest.getInstance("SHA-256");
-			String seed = username + password;
+			String seed = username.toLowerCase() + password;
 			md.update(seed.getBytes("UTF-8"));
 			return md.digest();
 		} catch (NoSuchAlgorithmException | UnsupportedEncodingException ex) {
@@ -68,7 +68,7 @@ public class PasswordHasher {
 		
 		try {
 			storage.selectDb("passwords");
-			storage.writeObject(username, password);
+			storage.writeObject(username.toLowerCase(), password);
 		} catch (IOException ex) {
 			Alerter.getHandler().severe("Authetication", "Unable to write password to persistence. " + ex.getMessage());
 		}
@@ -87,7 +87,7 @@ public class PasswordHasher {
 		try {
 			// hash + salt = password
 			storage.selectDb("passwords");
-			Object obj = storage.readObject(username);
+			Object obj = storage.readObject(username.toLowerCase());
 			Password password = (Password) obj;
 			if (password == null) {
 				// User doesn't exist

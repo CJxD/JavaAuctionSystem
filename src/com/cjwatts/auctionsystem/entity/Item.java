@@ -3,32 +3,31 @@ package com.cjwatts.auctionsystem.entity;
 import java.io.Serializable;
 import java.sql.Timestamp;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.PriorityQueue;
+
+import com.cjwatts.auctionsystem.exception.BidException;
 
 public class Item implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private String title;
-	private String description;
-	private String category;
-	private int vendor;
+	private String title = "";
+	private String description = "";
+	private Category category = Category.MISC;
+	private String vendor = "";
 
 	private Timestamp start, end;
-	private PriorityQueue<Bid> bids = new PriorityQueue<>();
+	private PriorityQueue<Bid> bids = new PriorityQueue<>(20, Collections.reverseOrder());
 
 	public Item() {
-		setStart(new Timestamp(new Date().getTime()));
-		// Add start bid of 0.00
-		bids.add(new Bid("[Reserve]", 0.00f));
-	}
-	
-	/**
-	 * @return The highest bid on this item
-	 */
-	public Bid getHighestBid() {
-		return bids.peek();
+		// Default start and end times
+		this.setStart(new Timestamp(new Date().getTime()));
+		this.setEnd(this.getStart());
+		
+		bids.add(new Bid("", 0.00));
 	}
 
 	/**
@@ -40,17 +39,19 @@ public class Item implements Serializable {
 	 *            The monetary value of the bid
 	 * @return True if bid was successful.
 	 */
-	public boolean addBid(String username, Float bid) {
-		// Add the bid only if it's higher than the maximum and the user is
-		// different
+	public void addBid(String username, Double bid) throws BidException {
+		if (username.equals(vendor)) {
+			throw new BidException("You cannot bid on your own item!");
+		}
+		
 		Bid newBid = new Bid(username, bid);
 		Bid highBid = getHighestBid();
-		if (highBid.compareTo(newBid) < 0 && !highBid.username.equals(username)) {
-			bids.add(newBid);
-			return true;
-		} else {
-			return false;
+
+		if (newBid.compareTo(highBid) <= 0) {
+			throw new BidException("Sorry, you have been out-bid by the current highest bidder.");
 		}
+		
+		bids.add(newBid);
 	}
 
 	/**
@@ -61,7 +62,7 @@ public class Item implements Serializable {
 	 * @param bid
 	 *            The monetary value of the bid
 	 */
-	public void removeBid(String username, Float bid) {
+	public void removeBid(String username, Double bid) {
 		Bid b = new Bid(username, bid);
 		bids.remove(b);
 	}
@@ -87,41 +88,26 @@ public class Item implements Serializable {
 	}
 	
 	/**
+	 * @return The highest bid on this item
+	 */
+	public Bid getHighestBid() {
+		return bids.peek();
+	}
+	
+	/**
+	 * @return True if auction has started but not yet finished
+	 */
+	public boolean isActive() {
+		long now = new Date().getTime() / 1000;
+		return (start.getTime() < now) && (now < end.getTime());
+	}
+	
+	/**
 	 * @return Time left in seconds
 	 */
 	public long timeLeft() {
-		return (end.getTime() - new Date().getTime()) / 1000;
-	}
-
-	/**
-	 * @return String formatted in the form Uy Vm Wd Xh Ym Zs
-	 */
-	public String getRemainingTime() {
-		long seconds = timeLeft();
-		
-		// This is only an approximation - it doesn't count actual calendar months
-		long minutes = seconds / 60;
-		long hours = minutes / 60;
-		long days = hours / 24;
-		long months = days / 30;
-		long years = days / 365;
-		
-		// Take the modulus of each component to get relative time
-		seconds %= 60;
-		minutes %= 60;
-		hours %= 24;
-		days %= 30;
-		months %= 12;
-		
-		StringBuilder time = new StringBuilder();
-		if (years > 0) time.append(years + "y ");
-		if (months > 0) time.append(months + "m ");
-		if (days > 0) time.append(days + "d ");
-		if (hours > 0) time.append(hours + "h ");
-		time.append(minutes + "m ");
-		time.append(seconds + "s");
-		
-		return time.toString();
+		long now = new Date().getTime() / 1000;
+		return (end.getTime() - now);
 	}
 	
 	public String getTitle() {
@@ -140,22 +126,30 @@ public class Item implements Serializable {
 		this.description = description;
 	}
 
-	public String getCategory() {
+	public Category getCategory() {
 		return category;
 	}
 
-	public void setCategory(String category) {
+	public void setCategory(Category category) {
 		this.category = category;
 	}
 
-	public int getVendor() {
+	public String getVendor() {
 		return vendor;
 	}
 
-	public void setVendor(int vendor) {
+	public void setVendor(String vendor) {
 		this.vendor = vendor;
 	}
 
+	public ArrayList<Bid> getBids() {
+		ArrayList<Bid> history = new ArrayList<>(20);
+		for (Bid b : bids) {
+			history.add(b);
+		}
+		return history;
+	}
+	
 	public Timestamp getStart() {
 		return start;
 	}
@@ -172,11 +166,14 @@ public class Item implements Serializable {
 		this.end = end;
 	}
 
-	public class Bid implements Comparable<Bid> {
-		public String username;
-		public Float bid;
+	public class Bid implements Comparable<Bid>, Serializable {
 
-		public Bid(String username, Float bid) {
+		private static final long serialVersionUID = 1L;
+		
+		public String username;
+		public Double bid;
+
+		public Bid(String username, Double bid) {
 			this.username = username;
 			this.bid = bid;
 		}
@@ -187,6 +184,17 @@ public class Item implements Serializable {
 		public String formatted() {
 			NumberFormat formatter = NumberFormat.getCurrencyInstance();
 			return formatter.format(bid);
+		}
+		
+		/**
+		 * @return The bid value formatted as currency with the name of the bidder
+		 */
+		public String formattedWithName() {
+			String formatted = formatted();
+			if (!username.equals("")) {
+				formatted += " (" + username + ")";
+			}
+			return formatted;
 		}
 
 		@Override

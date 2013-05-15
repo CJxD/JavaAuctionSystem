@@ -41,8 +41,7 @@ public class Comms {
 		boolean success = true;
 		try (Socket txSock = new Socket(remoteAddr, transmitPort);
 			ObjectOutputStream oos = new ObjectOutputStream(txSock.getOutputStream())) {
-
-			m.setSource(localAddr);
+			
 			oos.writeObject(m);
 		} catch (IOException ex) {
 			// TODO: Make this thread safe
@@ -60,6 +59,21 @@ public class Comms {
 			// Reset attempt counter
 			attemptCount = 0;
 		}
+		return success;
+	}
+	
+	/**
+	 * Send a message to another system
+	 * 
+	 * @param m
+	 * @param destination
+	 * @return True if successful
+	 */
+	public synchronized static boolean sendMessage(Message m, InetAddress destination) {
+		InetAddress previous = getRemoteAddr();
+		setRemoteAddr(destination);
+		boolean success = sendMessage(m);
+		setRemoteAddr(previous);
 		return success;
 	}
 
@@ -102,6 +116,7 @@ public class Comms {
 				ObjectInputStream ois = new ObjectInputStream(client.getInputStream())) {
 
 				output = (Message) ois.readObject();
+				output.setSource(client.getInetAddress());
 			} catch (IOException ex) {
 				Alerter.getHandler().severe(
 						"Communication Error",

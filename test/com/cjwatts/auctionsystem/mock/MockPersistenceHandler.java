@@ -2,6 +2,7 @@ package com.cjwatts.auctionsystem.mock;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Set;
 
 import com.cjwatts.auctionsystem.io.PersistenceHandler;
 
@@ -12,6 +13,7 @@ public class MockPersistenceHandler implements PersistenceHandler {
 
 	@Override
 	public void selectDb(String dbName) throws IOException {
+		data.clear();
 	}
 
 	@Override
@@ -30,6 +32,11 @@ public class MockPersistenceHandler implements PersistenceHandler {
 	@Override
 	public Object readObject(Object key) throws IOException {
 		return data.get(key);
+	}
+	
+	@Override
+	public Set<Object> keySet() throws IOException {
+		return data.keySet();
 	}
 
 	@Override

@@ -1,5 +1,7 @@
 package com.cjwatts.auctionsystem.gui;
 
+import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 
 import javax.swing.*;
@@ -10,13 +12,13 @@ import com.cjwatts.auctionsystem.entity.Item;
 public class ListingPanel extends JPanel {
 	private static final long serialVersionUID = 1L;
 
-	public ListingPanel(final Item i) {
+	public ListingPanel(Item i) {
 		super();
 		
-		ImagePanel picture = new ImagePanel(new BufferedImage(150, 90, BufferedImage.TYPE_INT_ARGB)); // i.getPicture();
+		ImagePanel picture = new ImagePanel(new BufferedImage(90, 90, BufferedImage.TYPE_INT_ARGB)); // i.getPicture();
 		JLabel title = new JLabel(i.getTitle());
 		JLabel bid = new JLabel(i.getHighestBid().formatted());
-		JLabel time = new JLabel(i.getRemainingTime());
+		JLabel time = new DynamicTimeLabel(i);
 		
 		GroupLayout listingLayout = new GroupLayout(this);
 		listingLayout.setHorizontalGroup(listingLayout.createSequentialGroup()
@@ -45,5 +47,8 @@ public class ListingPanel extends JPanel {
 			.addContainerGap()
 		);
 		this.setLayout(listingLayout);
+		
+		this.setPreferredSize(new Dimension(200, 90));
+		this.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
 	}
 }

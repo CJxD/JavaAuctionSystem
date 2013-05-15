@@ -42,7 +42,7 @@ public class SessionHandler {
 		
 		try {
 			storage.selectDb("sessions");
-			storage.writeObject(username, session);
+			storage.writeObject(username.toLowerCase(), session);
 		} catch (IOException ex) {
 			Alerter.getHandler().severe("Authetication", "Unable to record session. " + ex.getMessage());
 			return null;
@@ -63,7 +63,7 @@ public class SessionHandler {
 	public boolean checkSession(String username, byte[] sessionToken) {
 		try {
 			storage.selectDb("sessions");
-			Session session = (Session) storage.readObject(username);
+			Session session = (Session) storage.readObject(username.toLowerCase());
 
 			// Check token
 			boolean valid = Arrays.equals(sessionToken, session.getSessionToken());

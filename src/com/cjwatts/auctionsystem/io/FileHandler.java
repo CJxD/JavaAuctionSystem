@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.HashMap;
+import java.util.Set;
 
 public class FileHandler implements PersistenceHandler {
 
@@ -92,6 +93,16 @@ public class FileHandler implements PersistenceHandler {
 			return cache.get(key);
 		}
 	}
+	
+	@Override
+	public Set<Object> keySet() throws IOException {
+		synchronized (cacheLock) {
+			// When the cache is invalidated, it is set to null
+			if (cache == null)
+				readFile();
+			return cache.keySet();
+		}
+	}
 
 	/**
 	 * Read cache from disk
@@ -102,10 +113,9 @@ public class FileHandler implements PersistenceHandler {
 	private void readFile() throws IOException {
 		synchronized (file) {
 			if (!file.exists()) {
-				file.getParentFile().mkdirs();
-				file.createNewFile();
 				autoincrement = 0;
 				cache = new HashMap<Object, Object>();
+				writeFile();
 			} else {
 				// Hooray Java 7 try resource closing!
 				try (FileInputStream fis = new FileInputStream(file);
