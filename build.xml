@@ -2,13 +2,24 @@
 <project default="create_run_jar" name="Create Runnable Jar for Project AuctionSystem">
     <!--this file was created by Eclipse Runnable JAR Export Wizard-->
     <!--ANT 1.7 is required                                        -->
-    <target name="create_run_jar">
+    <target name="create_run_jar" depends="build">
         <jar destfile="bin/AuctionSystem.jar" filesetmanifest="mergewithoutmain">
             <manifest>
                 <attribute name="Main-Class" value="AuctionSystem"/>
                 <attribute name="Class-Path" value="."/>
             </manifest>
             <fileset dir="bin"/>
+        	<fileset dir="." includes="res/**" />
         </jar>
+    </target>
+	
+	<target name="build" depends="clean">
+		<javac srcdir="src" destdir="bin" debug="on" includeantruntime="false">
+		</javac>
+	</target>
+	
+	<target name="clean">
+	    <delete dir="bin" />
+		<mkdir dir="bin"/>
     </target>
 </project>

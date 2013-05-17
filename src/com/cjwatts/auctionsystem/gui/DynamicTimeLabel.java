@@ -26,7 +26,7 @@ public class DynamicTimeLabel extends JLabel implements Runnable {
 	
 	@Override
 	public void run() {
-		this.setText(getRemainingTime(item.timeLeft()));
+		this.setText(getRemainingTime(item.timeLeft() / 1000));
 	}
 	
 	/**

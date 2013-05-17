@@ -44,7 +44,6 @@ public class Comms {
 			
 			oos.writeObject(m);
 		} catch (IOException ex) {
-			// TODO: Make this thread safe
 			if (attemptCount < attemptMax - 1) {
 				attemptCount++;
 				success = sendMessage(m);

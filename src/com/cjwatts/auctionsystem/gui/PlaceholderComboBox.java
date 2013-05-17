@@ -30,6 +30,7 @@ public class PlaceholderComboBox extends JComboBox<Object> implements FocusListe
 			this.setFont(normalFont);
 			this.removeItem(placeholder);
 			this.insertItemAt(new String(""), 0);
+			this.setSelectedIndex(0);
 		}
 	}
 

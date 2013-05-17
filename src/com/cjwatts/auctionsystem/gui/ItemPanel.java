@@ -2,12 +2,12 @@ package com.cjwatts.auctionsystem.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 
 import javax.swing.*;
 import javax.swing.LayoutStyle.ComponentPlacement;
@@ -22,12 +22,13 @@ public class ItemPanel extends JPanel {
 	public ItemPanel(final Item i) {
 		super();
 		
-		ImagePanel picture = new ImagePanel(new BufferedImage(200, 125, BufferedImage.TYPE_INT_ARGB)); // i.getPicture();
-		JLabel title = new JLabel(i.getTitle());
+		ImagePanel picture = new ImagePanel(i.getImage(), 120, 120);
+		JLabel title = new JLabel("<html><h3>" + i.getTitle() + "</h3></html>");
 		JLabel bid = new JLabel(i.getHighestBid().formattedWithName());
 		JLabel history = new JLabel("<html><font color=\"#000099\"><u>View Bid History</u></font></html>");
+		history.setCursor(new Cursor(Cursor.HAND_CURSOR));
 		JLabel time = new DynamicTimeLabel(i);
-		JLabel description = new JLabel("<html>" + i.getDescription() + "</html>");
+		JLabel description = new JLabel("<html><h3>Description</h3>" + i.getDescription() + "</html>");
 		
 		final CurrencySpinner newBid = new CurrencySpinner();
 		newBid.setValue(0.0 + i.getHighestBid().bid);
@@ -61,18 +62,27 @@ public class ItemPanel extends JPanel {
 		    public void mouseClicked(MouseEvent arg0) {
 				JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(ItemPanel.this);
 
-				JLabel text = new JLabel();
-				text.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
-				text.setText("<html><h2>Bid History</h2>");
+				JPanel content = new JPanel();
+				content.setLayout(new BorderLayout());
+				content.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
+				
+				JLabel title = new JLabel("<html><h2>Bid History</h2></html>");
+				JTextArea text = new JTextArea();
+				text.setEditable(false);
+				JScrollPane textScroll = new JScrollPane(
+						text,
+						JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+						JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+				content.add(title, BorderLayout.NORTH);
+				content.add(textScroll, BorderLayout.CENTER);
 				
 				for (Bid b : i.getBids()) {
-					text.setText(text.getText() + b.formattedWithName() + "<br>");
+					text.setText(text.getText() + b.formattedWithName() + '\n');
 				}
-				text.setText(text.getText() + "</html>");
 				
 				JDialog dialog = new JDialog(parent, true);
-				dialog.setLayout(new BorderLayout());
-				dialog.add(text, BorderLayout.NORTH);
+				dialog.setTitle("Bid History");
+				dialog.add(content);
 				dialog.setSize(new Dimension(200, 300));
 				dialog.setLocationRelativeTo(parent);
 				dialog.setVisible(true);
@@ -96,7 +106,7 @@ public class ItemPanel extends JPanel {
 						)
 						.addComponent(time)
 						.addGroup(itemLayout.createSequentialGroup()
-							.addComponent(newBid)
+							.addComponent(newBid, GroupLayout.PREFERRED_SIZE, GroupLayout.PREFERRED_SIZE, GroupLayout.PREFERRED_SIZE)
 							.addPreferredGap(ComponentPlacement.RELATED)
 							.addComponent(applyBid)
 						)

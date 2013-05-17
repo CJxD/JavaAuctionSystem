@@ -13,7 +13,7 @@ import com.cjwatts.auctionsystem.io.PersistenceHandler;
 
 public class SessionHandler {
 	private PersistenceHandler storage = new FileHandler();
-	public static final long SESSION_TIMEOUT = 900; // 15 minutes
+	public static final long SESSION_TIMEOUT = 600; // 10 minutes
 
 	public SessionHandler() {
 	}

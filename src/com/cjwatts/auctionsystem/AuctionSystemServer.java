@@ -1,15 +1,22 @@
 package com.cjwatts.auctionsystem;
 
+import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+
+import javax.swing.*;
+import javax.swing.LayoutStyle.ComponentPlacement;
 
 import com.cjwatts.auctionsystem.alert.Alerter;
 import com.cjwatts.auctionsystem.entity.Category;
 import com.cjwatts.auctionsystem.entity.Item;
+import com.cjwatts.auctionsystem.entity.Item.Bid;
 import com.cjwatts.auctionsystem.entity.User;
 import com.cjwatts.auctionsystem.exception.BidException;
 import com.cjwatts.auctionsystem.io.AuctionConsole;
@@ -30,7 +37,7 @@ public class AuctionSystemServer implements CommsListener {
 		AuctionConsole console = new AuctionConsole();
 		Alerter.setHandler(console);
 
-		server.setup();
+		server.init();
 		String input;
 		// Read input and repeat until "stop" is entered.
 		do {
@@ -39,6 +46,133 @@ public class AuctionSystemServer implements CommsListener {
 		server.close();
 	}
 
+	/**
+	 * Initialises the server with GUI
+	 */
+	public void init() {
+		// Start GUI
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				JFrame frame = new JFrame("Auction System Server");
+				JPanel content = new JPanel();
+				final JButton generateReport = new JButton("Generate Report");
+				final JButton start = new JButton("Start Server");
+				start.setEnabled(false);
+				final JButton stop = new JButton("Stop Server");
+				final JTextArea report = new JTextArea();
+				JScrollPane reportScroll = new JScrollPane(
+											report,
+											JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+											JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+				report.setEditable(false);
+				
+				generateReport.addActionListener(new ActionListener() {
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						report.setText("Ended auctions:\n");
+						try {
+							storage.selectDb("items");
+							Set<Object> keys = storage.keySet();
+							String format = "%s\nItem #%d - '%s':\nWon by %s %s for %s on %s\n";
+							Item item;
+							String bidderId;
+							User bidderProfile;
+							for (Object key : keys) {
+								item = (Item) storage.readObject(key);
+								if (item.getHighestBid() != null) {
+									if (item.timeLeft() == 0) {
+										bidderId = item.getHighestBid().username;
+										storage.selectDb("users");
+										bidderProfile = (User) storage.readObject(bidderId);
+										
+										if (bidderProfile == null) {
+											bidderProfile = new User();
+											bidderProfile.setFirstName("anonymous");
+											bidderProfile.setLastName("user");
+										}
+										report.setText(
+												String.format(
+														format,
+														report.getText(), 
+														key,
+														item.getTitle(),
+														bidderProfile.getFirstName(),
+														bidderProfile.getLastName(),
+														item.getHighestBid().formatted(),
+														item.getEnd().toString()));
+									}
+								}
+								storage.selectDb("items");
+							}
+						} catch (IOException ex) {
+							Alerter.getHandler().severe("Persistence Error",
+									"Unable to retrieve item information.");
+						}
+					}
+				});
+				
+				start.addActionListener(new ActionListener() {
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						start.setEnabled(false);
+						setup();
+						stop.setEnabled(true);
+					}
+				});
+				
+				stop.addActionListener(new ActionListener() {
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						stop.setEnabled(false);
+						close();
+						start.setEnabled(true);
+					}
+				});
+				
+				// Layout code
+				GroupLayout contentLayout = new GroupLayout(content);
+				contentLayout.setHorizontalGroup(contentLayout.createSequentialGroup()
+					.addContainerGap()
+					.addGroup(contentLayout.createParallelGroup()
+						.addComponent(reportScroll)
+						.addComponent(generateReport, GroupLayout.PREFERRED_SIZE, GroupLayout.PREFERRED_SIZE, Short.MAX_VALUE)
+						.addGroup(contentLayout.createSequentialGroup()
+							.addComponent(start, GroupLayout.PREFERRED_SIZE, GroupLayout.PREFERRED_SIZE, Short.MAX_VALUE)
+							.addPreferredGap(ComponentPlacement.UNRELATED)
+							.addComponent(stop, GroupLayout.PREFERRED_SIZE, GroupLayout.PREFERRED_SIZE, Short.MAX_VALUE)
+						)
+					)
+					.addContainerGap()
+				);
+				contentLayout.setVerticalGroup(contentLayout.createSequentialGroup()
+					.addContainerGap()
+					.addComponent(reportScroll)
+					.addPreferredGap(ComponentPlacement.UNRELATED)
+					.addComponent(generateReport)
+					.addPreferredGap(ComponentPlacement.RELATED)
+					.addGroup(contentLayout.createParallelGroup()
+						.addComponent(start)
+						.addComponent(stop)
+					)
+					.addContainerGap()
+				);
+				content.setLayout(contentLayout);
+				
+				frame.setContentPane(content);
+				frame.pack();
+				frame.setSize(new Dimension(480, 500));
+				frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+				frame.setVisible(true);
+			}
+		});
+		
+		setup();
+	}
+	
+	/**
+	 * Initialises the actual server
+	 */
 	public void setup() {
 		Alerter.getHandler().info("Auction System server is starting.");
 
@@ -46,12 +180,16 @@ public class AuctionSystemServer implements CommsListener {
 		int temp = Comms.getReceivePort();
 		Comms.setReceivePort(Comms.getTransmitPort());
 		Comms.setTransmitPort(temp);
+		// Listen for connections
 		Comms.addCommsListener(this);
-
 		Comms.listen();
+		
 		Alerter.getHandler().info("Auction System server is ready.");
 	}
 
+	/**
+	 * Safely disconnects the server and closes the program
+	 */
 	public void close() {
 		Alerter.getHandler().info("Auction System is shutting down.");
 		Comms.hangup();
@@ -86,8 +224,10 @@ public class AuctionSystemServer implements CommsListener {
 	 */
 	private void respond(Request rq, Response re) {
 		// If no new session token has been provided, generate one
-		SessionHandler sh = new SessionHandler(storage);
-		re.setSessionToken(sh.generateToken(rq.getSenderId()));
+		if (re.getSessionToken() == null) {
+			SessionHandler sh = new SessionHandler(storage);
+			re.setSessionToken(sh.generateToken(rq.getSenderId()));
+		}
 		
 		String info = re.getClass().getSimpleName() + " to " + rq.getSource().getHostAddress();
 		// Send the response to whoever sent the request
@@ -319,8 +459,8 @@ public class AuctionSystemServer implements CommsListener {
 				Item test1 = new Item();
 				test1.setCategory(Category.COMPUTING);
 				test1.setDescription("A new, lightweight, Java auction system that uses sockets to communicate with a central sever.");
-				test1.setStart(new Timestamp(new Date().getTime() / 1000));
-				test1.setEnd(new Timestamp(Integer.MAX_VALUE));
+				test1.setStart(new Date());
+				test1.setEnd(new Date(((long) Integer.MAX_VALUE) * 1000));
 				test1.setTitle("Java Auction System");
 				test1.setVendor("cw17g12");
 				storage.writeObject(test1);
@@ -328,8 +468,8 @@ public class AuctionSystemServer implements CommsListener {
 				Item test2 = new Item();
 				test2.setCategory(Category.MISC);
 				test2.setDescription("Contrary to the system in use, this item can only be purchased through a high mark given for the coursework. (16/17.5 or greater)");
-				test2.setStart(new Timestamp(new Date().getTime() / 1000));
-				test2.setEnd(new Timestamp(1370840400));
+				test2.setStart(new Date());
+				test2.setEnd(new Date(1370840400L * 1000));
 				test2.setTitle("Eternal Respect");
 				test2.setVendor("cw17g12");
 				storage.writeObject(test2);
@@ -337,8 +477,8 @@ public class AuctionSystemServer implements CommsListener {
 				Item test3 = new Item();
 				test3.setCategory(Category.MISC);
 				test3.setDescription("This auction will end within the next hour! Hurry!");
-				test3.setStart(new Timestamp(new Date().getTime() / 1000));
-				test3.setEnd(new Timestamp(test2.getStart().getTime() + 3600));
+				test3.setStart(new Date());
+				test3.setEnd(new Date(test3.getStart().getTime() + 3600000));
 				test3.setTitle("Lack of Time");
 				test3.setVendor("cw17g12");
 				storage.writeObject(test3);
@@ -374,6 +514,15 @@ public class AuctionSystemServer implements CommsListener {
 						valid = false;
 					}
 				}
+
+				if (valid && rq.getBidder() != null) {
+					boolean found = false;
+					Iterator<Bid> it = next.getBids().iterator();
+					while (!found && it.hasNext()) {
+						found = it.next().username.equals(rq.getBidder());
+					}
+					valid = found;
+				}
 				
 				if (valid && rq.getCategory() != null) {
 					if (!next.getCategory().equals(rq.getCategory())) {
@@ -398,7 +547,6 @@ public class AuctionSystemServer implements CommsListener {
 		} catch (IOException ex) {
 			Alerter.getHandler().severe("Persistence Error",
 					"Unable to retrieve item information.");
-			ex.printStackTrace();
 			re.setMessage("A server error occurred. Please try again later.");
 		}
 

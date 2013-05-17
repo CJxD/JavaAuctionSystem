@@ -13,6 +13,8 @@ import com.cjwatts.auctionsystem.io.FileHandler;
 import com.cjwatts.auctionsystem.io.PersistenceHandler;
 
 public class PasswordHasher {
+	private static final int hashStretchFactor = 30000;
+	
 	private PersistenceHandler storage = new FileHandler();
 
 	public PasswordHasher() {
@@ -35,8 +37,14 @@ public class PasswordHasher {
 			// Hash the password with the user id (a constant salt)
 			MessageDigest md = MessageDigest.getInstance("SHA-256");
 			String seed = username.toLowerCase() + password;
-			md.update(seed.getBytes("UTF-8"));
-			return md.digest();
+			byte[] bytes = seed.getBytes("UTF-8");
+			
+			// Do some key stretching to slow down brute force attacks
+			for (int i = 0; i < hashStretchFactor; i++) {
+				md.update(bytes);
+				bytes = md.digest();
+			}
+			return bytes;
 		} catch (NoSuchAlgorithmException | UnsupportedEncodingException ex) {
 			Alerter.getHandler().severe("Authetication", "Unable to securely prepare password for transmission. Login failed. " + ex.getMessage());
 			return null;
@@ -112,14 +120,18 @@ public class PasswordHasher {
 	private byte[] rehash(byte[] passwordHash, byte[] salt) {
 		try {
 			MessageDigest md = MessageDigest.getInstance("SHA-256");
-			byte[] seed = new byte[passwordHash.length + salt.length];
+			byte[] bytes = new byte[passwordHash.length + salt.length];
 
 			// Join passwordHash and salt together into a single array, seed
-			System.arraycopy(passwordHash, 0, seed, 0, passwordHash.length);
-			System.arraycopy(salt, 0, seed, passwordHash.length, salt.length);
+			System.arraycopy(passwordHash, 0, bytes, 0, passwordHash.length);
+			System.arraycopy(salt, 0, bytes, passwordHash.length, salt.length);
 
-			md.update(seed);
-			return md.digest();
+			// Do some key stretching
+			for (int i = 0; i < hashStretchFactor; i++) {
+				md.update(bytes);
+				bytes = md.digest();
+			}
+			return bytes;
 		} catch (NoSuchAlgorithmException ex) {
 			Alerter.getHandler().severe("Authetication", "Unable to re-hash password for saving. " + ex.getMessage());
 			return null;

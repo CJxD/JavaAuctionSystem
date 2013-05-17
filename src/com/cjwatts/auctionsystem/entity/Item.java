@@ -1,12 +1,18 @@
 package com.cjwatts.auctionsystem.entity;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.sql.Timestamp;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.PriorityQueue;
+
+import javax.imageio.ImageIO;
 
 import com.cjwatts.auctionsystem.exception.BidException;
 
@@ -14,22 +20,40 @@ public class Item implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private String title = "";
-	private String description = "";
 	private Category category = Category.MISC;
+	private String description = "";
+	private transient BufferedImage image = null; // Not serializable automatically
+	private String title = "";
 	private String vendor = "";
 
-	private Timestamp start, end;
+	private Date start, end;
 	private PriorityQueue<Bid> bids = new PriorityQueue<>(20, Collections.reverseOrder());
 
 	public Item() {
 		// Default start and end times
-		this.setStart(new Timestamp(new Date().getTime()));
+		this.setStart(new Date());
 		this.setEnd(this.getStart());
 		
 		bids.add(new Bid("", 0.00));
 	}
-
+	
+	private void writeObject(ObjectOutputStream out) throws IOException {
+		out.defaultWriteObject();
+		if (image != null) {
+			out.writeBoolean(true);
+			ImageIO.write(image, "png", out);
+		} else {
+			out.writeBoolean(false);
+		}
+	}
+	
+	private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+		in.defaultReadObject();
+		if (in.readBoolean()) {
+			image = ImageIO.read(in);
+		}
+	}
+	
 	/**
 	 * Add a bid to this item.
 	 * 
@@ -98,32 +122,17 @@ public class Item implements Serializable {
 	 * @return True if auction has started but not yet finished
 	 */
 	public boolean isActive() {
-		long now = new Date().getTime() / 1000;
+		long now = new Date().getTime();
 		return (start.getTime() < now) && (now < end.getTime());
 	}
 	
 	/**
-	 * @return Time left in seconds
+	 * @return Time left in milliseconds
 	 */
 	public long timeLeft() {
-		long now = new Date().getTime() / 1000;
-		return (end.getTime() - now);
-	}
-	
-	public String getTitle() {
-		return title;
-	}
-
-	public void setTitle(String title) {
-		this.title = title;
-	}
-
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
+		long now = new Date().getTime();
+		long left = end.getTime() - now;
+		return left < 0 ? 0 : left;
 	}
 
 	public Category getCategory() {
@@ -133,7 +142,39 @@ public class Item implements Serializable {
 	public void setCategory(Category category) {
 		this.category = category;
 	}
+	
+	public String getDescription() {
+		return description;
+	}
 
+	public void setDescription(String description) {
+		this.description = description;
+	}
+
+	public BufferedImage getImage() {
+		if (image == null) {
+			try {
+				return ImageIO.read(new File("res/default.png"));
+			} catch (IOException ex) {
+				return null;
+			}
+		} else {
+			return image;
+		}
+	}
+
+	public void setImage(BufferedImage image) {
+		this.image = image;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
+	
 	public String getVendor() {
 		return vendor;
 	}
@@ -145,24 +186,24 @@ public class Item implements Serializable {
 	public ArrayList<Bid> getBids() {
 		ArrayList<Bid> history = new ArrayList<>(20);
 		for (Bid b : bids) {
-			history.add(b);
+			if (b.bid > 0) history.add(b);
 		}
 		return history;
 	}
 	
-	public Timestamp getStart() {
+	public Date getStart() {
 		return start;
 	}
 
-	public void setStart(Timestamp start) {
+	public void setStart(Date start) {
 		this.start = start;
 	}
 
-	public Timestamp getEnd() {
+	public Date getEnd() {
 		return end;
 	}
 
-	public void setEnd(Timestamp end) {
+	public void setEnd(Date end) {
 		this.end = end;
 	}
 
